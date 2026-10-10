@@ -1,0 +1,486 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Generate Android project
+        run: |
+          mkdir -p app/src/main/java/com/smartcleaner/app
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SmartCleaner"
+          include(":app")
+          EOF
+
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          EOF
+
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.smartcleaner.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.smartcleaner.app"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+              <application
+                  android:label="منظف ذكي"
+                  android:icon="@mipmap/ic_launcher"
+                  android:supportsRtl="true"
+                  android:requestLegacyExternalStorage="true"
+                  android:theme="@style/Theme.App">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/values/themes.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.App" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">#0F9D8A</item>
+                  <item name="colorPrimaryDark">#0B6B5E</item>
+                  <item name="colorAccent">#0F9D8A</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0F9D8A</color>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+
+          cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M54,30 C56,46 62,52 78,54 C62,56 56,62 54,78 C52,62 46,56 30,54 C46,52 52,46 54,30 Z" />
+              <path
+                  android:fillColor="#B9F5EA"
+                  android:pathData="M74,26 C75,31 77,33 82,34 C77,35 75,37 74,42 C73,37 71,35 66,34 C71,33 73,31 74,26 Z" />
+              <path
+                  android:fillColor="#B9F5EA"
+                  android:pathData="M34,68 C35,71 36,72 39,73 C36,74 35,75 34,78 C33,75 32,74 29,73 C32,72 33,71 34,68 Z" />
+          </vector>
+          EOF
+
+          cat > app/src/main/java/com/smartcleaner/app/Fmt.kt <<'EOF'
+          package com.smartcleaner.app
+
+          import java.util.Locale
+
+          object Fmt {
+              fun size(b: Long): String {
+                  if (b < 1024) return "$b B"
+                  val units = arrayOf("KB", "MB", "GB", "TB")
+                  var v = b.toDouble() / 1024
+                  var i = 0
+                  while (v >= 1024 && i < units.size - 1) {
+                      v /= 1024
+                      i++
+                  }
+                  return String.format(Locale.US, "%.1f %s", v, units[i])
+              }
+
+              fun age(ms: Long): String {
+                  val d = (System.currentTimeMillis() - ms) / 86400000L
+                  return if (d < 1) "اليوم"
+                  else if (d < 30) "منذ $d يوم"
+                  else if (d < 365) "منذ ${d / 30} شهر"
+                  else "منذ ${d / 365} سنة"
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/smartcleaner/app/StorageScanner.kt <<'EOF'
+          package com.smartcleaner.app
+
+          import java.io.File
+          import java.security.MessageDigest
+
+          data class Item(val file: File, val size: Long, val modified: Long)
+
+          class Category(
+              val title: String,
+              val note: String,
+              val items: List<Item>,
+              defaultOn: Boolean,
+              val safety: Int
+          ) {
+              val selected: MutableSet<Item> = if (defaultOn) items.toMutableSet() else mutableSetOf()
+              fun totalSize(): Long = items.sumOf { it.size }
+          }
+
+          object StorageScanner {
+              private const val MB = 1024L * 1024L
+              private const val DAY = 24L * 60L * 60L * 1000L
+              private val junkExt = setOf("tmp", "temp", "log", "bak", "old", "chk", "crdownload", "part")
+
+              fun scan(root: File, onProgress: (String) -> Unit): List<Category> {
+                  val junk = ArrayList<Item>()
+                  val apks = ArrayList<Item>()
+                  val large = ArrayList<Item>()
+                  val oldDownloads = ArrayList<Item>()
+                  val emptyDirs = ArrayList<Item>()
+                  val bySize = HashMap<Long, MutableList<Item>>()
+                  val now = System.currentTimeMillis()
+                  var count = 0
+
+                  val stack = java.util.ArrayDeque<File>()
+                  stack.push(root)
+                  while (!stack.isEmpty()) {
+                      val dir = stack.pop()
+                      val children = dir.listFiles() ?: continue
+                      if (children.isEmpty() && dir != root) {
+                          emptyDirs.add(Item(dir, 0L, dir.lastModified()))
+                          continue
+                      }
+                      for (f in children) {
+                          if (f.isDirectory) {
+                              if (f.parentFile == root && f.name == "Android") continue
+                              if (java.nio.file.Files.isSymbolicLink(f.toPath())) continue
+                              stack.push(f)
+                          } else if (f.isFile) {
+                              count++
+                              if (count % 300 == 0) onProgress("تم فحص $count ملف...")
+                              val size = f.length()
+                              val item = Item(f, size, f.lastModified())
+                              val path = f.absolutePath
+                              val ext = f.extension.lowercase()
+                              if (ext == "apk") {
+                                  apks.add(item)
+                              } else if (ext in junkExt || path.contains("/.thumbnails/") || path.contains("/cache/", true)) {
+                                  junk.add(item)
+                              }
+                              if (size >= 100 * MB) large.add(item)
+                              if (ext != "apk" && path.contains("/Download/") && now - item.modified > 90 * DAY) {
+                                  oldDownloads.add(item)
+                              }
+                              if (size >= MB) {
+                                  bySize.getOrPut(size) { ArrayList() }.add(item)
+                              }
+                          }
+                      }
+                  }
+
+                  onProgress("جارٍ البحث عن الملفات المكررة...")
+                  val dups = ArrayList<Item>()
+                  for (group in bySize.values) {
+                      if (group.size < 2) continue
+                      if (group[0].size > 1024 * MB) continue
+                      val byHash = HashMap<String, MutableList<Item>>()
+                      for (x in group) {
+                          val h = md5(x.file) ?: continue
+                          byHash.getOrPut(h) { ArrayList() }.add(x)
+                      }
+                      for (g in byHash.values) {
+                          if (g.size > 1) {
+                              g.sortBy { it.modified }
+                              dups.addAll(g.drop(1))
+                          }
+                      }
+                  }
+
+                  return listOfNotNull(
+                      mk("ملفات مؤقتة وسجلات", "ملفات تنتجها التطبيقات وغالباً آمنة للحذف", junk, 95),
+                      mk("مجلدات فاضية", "مجلدات مفيش فيها أي ملفات", emptyDirs, 90),
+                      mk("ملفات مكررة", "نسخ مطابقة تماماً لملفات تانية — بنسيب الأقدم ونحذف النسخ الأحدث", dups, 85),
+                      mk("ملفات APK قديمة", "ملفات تثبيت تطبيقات متحتاجهاش بعد التثبيت", apks, 80),
+                      mk("تنزيلات قديمة", "ملفات في مجلد التنزيلات أقدم من 3 شهور", oldDownloads, 60),
+                      mk("ملفات كبيرة", "ملفات أكبر من 100 ميجا — راجعها واختار بنفسك", large, 30)
+                  )
+              }
+
+              private fun mk(title: String, note: String, list: List<Item>, safety: Int): Category? {
+                  if (list.isEmpty()) return null
+                  return Category(title, note, list.sortedByDescending { it.size }, safety >= 80, safety)
+              }
+
+              private fun md5(f: File): String? {
+                  return try {
+                      val md = MessageDigest.getInstance("MD5")
+                      f.inputStream().use { s ->
+                          val buf = ByteArray(65536)
+                          while (true) {
+                              val n = s.read(buf)
+                              if (n <= 0) break
+                              md.update(buf, 0, n)
+                          }
+                      }
+                      md.digest().joinToString("") { "%02x".format(it) }
+                  } catch (e: Exception) {
+                      null
+                  }
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/smartcleaner/app/MainActivity.kt <<'EOF'
+          package com.smartcleaner.app
+
+          import android.Manifest
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import android.graphics.Color
+          import android.graphics.Typeface
+          import android.graphics.drawable.GradientDrawable
+          import android.media.MediaScannerConnection
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.os.Environment
+          import android.os.Handler
+          import android.os.Looper
+          import android.os.StatFs
+          import android.provider.Settings
+          import android.view.View
+          import android.widget.Button
+          import android.widget.CheckBox
+          import android.widget.LinearLayout
+          import android.widget.ProgressBar
+          import android.widget.ScrollView
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.appcompat.app.AlertDialog
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
+          import kotlin.concurrent.thread
+
+          class MainActivity : AppCompatActivity() {
+
+              private val main = Handler(Looper.getMainLooper())
+              private lateinit var container: LinearLayout
+              private var totalLabel: TextView? = null
+              private var cats: List<Category> = emptyList()
+              private var scanning = false
+              private val green = Color.parseColor("#0F9D8A")
+              private val gray = Color.parseColor("#666666")
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  window.decorView.layoutDirection = View.LAYOUT_DIRECTION_RTL
+                  val scroll = ScrollView(this)
+                  container = LinearLayout(this)
+                  container.orientation = LinearLayout.VERTICAL
+                  container.setPadding(dp(20), dp(40), dp(20), dp(24))
+                  scroll.addView(container)
+                  setContentView(scroll)
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  if (!scanning && cats.isEmpty()) showHome()
+              }
+
+              // ---------- helpers ----------
+
+              private fun dp(n: Int): Int = (n * resources.displayMetrics.density).toInt()
+
+              private fun tv(t: String, size: Float = 16f, bold: Boolean = false, color: Int = Color.parseColor("#222222")): TextView {
+                  val v = TextView(this)
+                  v.text = t
+                  v.textSize = size
+                  v.setTextColor(color)
+                  if (bold) v.setTypeface(v.typeface, Typeface.BOLD)
+                  v.setPadding(0, dp(4), 0, dp(4))
+                  return v
+              }
+
+              private fun btn(t: String, onClick: () -> Unit): Button {
+                  val b = Button(this)
+                  b.text = t
+                  b.setTextColor(Color.WHITE)
+                  val bg = GradientDrawable()
+                  bg.cornerRadius = dp(14).toFloat()
+                  bg.setColor(green)
+                  b.background = bg
+                  b.setOnClickListener { onClick() }
+                  val lp = LinearLayout.LayoutParams(
+                      LinearLayout.LayoutParams.MATCH_PARENT,
+                      LinearLayout.LayoutParams.WRAP_CONTENT
+                  )
+                  lp.topMargin = dp(10)
+                  b.layoutParams = lp
+                  return b
+              }
+
+              private fun storage(): Pair<Long, Long> {
+                  val st = StatFs(Environment.getExternalStorageDirectory().path)
+                  return Pair(st.totalBytes, st.availableBytes)
+              }
+
+              private fun hasAccess(): Boolean {
+                  return if (Build.VERSION.SDK_INT >= 30) {
+                      Environment.isExternalStorageManager()
+                  } else {
+                      ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                              PackageManager.PERMISSION_GRANTED
+                  }
+              }
+
+              private fun askAccess() {
+                  if (Build.VERSION.SDK_INT >= 30) {
+                      try {
+                          startActivity(
+                              Intent(
+                                  Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                  Uri.parse("package:$packageName")
+                              )
+                          )
+                      } catch (e: Exception) {
+                          startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                      }
+                  } else {
+                      ActivityCompat.requestPermissions(
+                          this,
+                          arrayOf(
+                              Manifest.permission.READ_EXTERNAL_STORAGE,
+                              Manifest.permission.WRITE_EXTERNAL_STORAGE
+                          ),
+                          1
+                      )
+                  }
+              }
+
+              override fun onRequestPermissionsResult(
+                  requestCode: Int,
+                  permissions: Array<out String>,
+                  grantResults: IntArray
+              ) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+                  showHome()
+              }
+
+              private fun openSettings(action: String) {
+                  try {
+                      startActivity(Intent(action))
+                  } catch (e: Exception) {
+                      Toast.makeText(this, "مقدرتش أفتح الإعدادات دي", Toast.LENGTH_SHORT).show()
+                  }
+              }
+
+              // ---------- screens ----------
+
+              private fun showHome() {
+                  totalLabel = null
+                  container.removeAllViews()
+                  container.addView(tv("🧹 منظف ذكي", 30f, true, green))
+                  container.addView(tv("نظّف هاتفك وافضّي مساحة بذكاء", 15f, false, gray))
+
+                  val (total, free) = storage()
+                  val used = total - free
+                  val pct = if (total > 0) (used * 100 / total).toInt() else 0
+                  container.addView(tv("المساحة المستخدمة: ${Fmt.size(used)} من ${Fmt.size(total)} ($pct%)", 16f, true))
+                  val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
+                  bar.max = 100
+                  bar.progress = pct
+                  container.addView(bar)
+                  container.addView(tv("المتاح: ${Fmt.size(free)}", 15f, false, gray))
+
+                  if (hasAccess()) {
+                      container.addView(btn("🔍 فحص ذكي الآن") { startScan() })
+                  } else {
+                      container.addView(tv("عشان أفحص الملفات محتاج صلاحية الوصول لكل الملفات. بتتفعل من الإعدادات مرة واحدة.", 14
